@@ -47,6 +47,17 @@ export const fetch_products = createAsyncThunk(
   }
 );
 
+export const checkout = createAsyncThunk("/checkout", async (products) => {
+  if (!products) throw new Error("Empty");
+  try {
+    const urlencoded = products.map((product) => encodeURIComponent(product));
+    const res = await AxiosInstance.patch(`/product/checkout/${urlencoded}`);
+    return res.data;
+  } catch (error) {
+    throw new Error(error.response.data.message);
+  }
+});
+
 export const fetch_my_products = createAsyncThunk(
   "/fetch_my_products",
   async () => {

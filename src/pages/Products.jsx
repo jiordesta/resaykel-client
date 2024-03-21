@@ -7,12 +7,15 @@ import Burger from "../components/Burger";
 import { error, success } from "../redux/reducers/notification_slice";
 import ScrollToTop from "../utilities/ScrollToTop";
 import ProductsSkeleton from "../components/ProductsSkeleton";
-import { fetch_products } from "../redux/reducers/product_slice";
+import { checkout, fetch_products } from "../redux/reducers/product_slice";
 import { SelectCategory } from "../components/CustomSelect";
 
 export default function Products() {
+  const [checkOutLoading, setCheckOutLoading] = useState(false);
+  const [total, setTotal] = useState(0);
   const { name, category } = useParams();
-
+  const [cart, setCart] = useState([]);
+  const [showCart, setShowCart] = useState(false);
   const { user, loading_user, loading_signout } = useSelector(
     (state) => state.user
   );
@@ -24,6 +27,17 @@ export default function Products() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    cart.map((id) => {
+      const product = products.find(({ _id }) => _id === id);
+      const newTotal = total + product.price;
+      setTotal(newTotal);
+    });
+    if (cart.length <= 0) {
+      setShowCart(false);
+    }
+  }, [cart]);
+
+  useEffect(() => {
     dispatch(fetch_user()).then((res) => {
       if (res.error) {
         handleNavigate("signin");
@@ -31,12 +45,13 @@ export default function Products() {
         dispatch(fetch_products({ name, category }));
       }
     });
-  }, [loading_signout, name, category]);
+  }, [loading_signout, name, category, showCart]);
 
   useEffect(() => {
-    const loading = loading_user || loading_products;
+    const loading =
+      loading_user || loading_products || checkOutLoading || showCart;
     document.body.style.overflow = loading ? "hidden" : "auto";
-  }, [loading_user, loading_products]);
+  }, [loading_user, loading_products, checkOutLoading, showCart]);
 
   const handleNavigate = (to) => {
     if (to === "home") {
@@ -44,6 +59,11 @@ export default function Products() {
     } else if (to === "signin") {
       navigate("/authentication/signin");
     }
+  };
+
+  const handleAddToCart = (product) => {
+    setCart([...cart, product._id]);
+    dispatch(success("Added"));
   };
 
   const handleSignout = () => {
@@ -92,7 +112,11 @@ export default function Products() {
               <div
                 className="flex justify-start items-center gap-1 cursor-pointer relative"
                 onClick={() => {
-                  console.log("open cart modal");
+                  if (cart.length <= 0) {
+                    dispatch(error("Empty Cart!"));
+                  } else {
+                    setShowCart(true);
+                  }
                 }}
               >
                 <div className="hidden relative md:flex justify-center items-center p-2 bg-color1 bg-opacity-5 rounded-full hover:bg-opacity-25 transition-all ease-in-out duration-500">
@@ -138,7 +162,76 @@ export default function Products() {
     );
   };
 
-  const Product = ({ name, desc, image, seller }) => {
+  const CartModal = () => {
+    return (
+      <div className="fixed inset-0 w-full h-full bg-black z-50 bg-opacity-50 flex justify-center items-center p-4">
+        <div className="w-full md:w-[80%] lg:w-[60%] xl:w-[40%] rounded-lg flex flex-col md:flex-row gap-2 h-[500px] relative">
+          <div className="w-full md:w-[60%] p-2 bg-color4 bg-opacity-75 rounded-lg overflow-auto h-full">
+            <ul className="flex flex-col gap-2">
+              {cart.map((id) => {
+                const product = products.find(({ _id }) => _id === id);
+                return (
+                  <li key={product._id}>
+                    <div className="flex gap-2 bg-color4 rounded-lg relative drop-shadow-md">
+                      <h1 className="p-2 w-1/4 truncate overflow-hidden">{`$${product?.price}`}</h1>
+                      <h1 className="p-2">{product?.name}</h1>
+                      <div className="absolute h-full w-full p-2 flex justify-end">
+                        <img
+                          src="/icons/trash.svg"
+                          width={30}
+                          alt=""
+                          className="cursor-pointer"
+                          onClick={() =>
+                            setCart(cart.filter((id) => id !== product._id))
+                          }
+                        />
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+          <div className="w-full md:w-[40%] space-y-2">
+            <div className="bg-color4 bg-opacity-75 rounded-lg h-[100px]">
+              <div className="w-full h-full flex justify-end items-center">
+                <h1 className="p-8 text-color3">{`$ ${total}`}</h1>
+              </div>
+            </div>
+            <button
+              className="p-2 bg-color1 text-color3 w-full rounded-lg uppercase hover:bg-color2 hover:text-color4"
+              onClick={() => {
+                setCheckOutLoading(true);
+                dispatch(checkout(cart)).then((res) => {
+                  if (res.error) {
+                    dispatch(error(res.error.message));
+                  } else {
+                    dispatch(success("Success"));
+                    setCart([]);
+                  }
+                  setCheckOutLoading(false);
+                });
+              }}
+            >
+              checkout
+            </button>
+            <button
+              className="p-2 bg-color1 text-color3 w-full rounded-lg uppercase hover:bg-color2 hover:text-color4"
+              onClick={() => {
+                setShowCart(false);
+              }}
+            >
+              close
+            </button>
+          </div>
+          {checkOutLoading && <Loading text="Please wait" w={35} />}
+        </div>
+      </div>
+    );
+  };
+
+  const Product = (product) => {
+    const { name, desc, image, seller } = product;
     const [expand, setExpand] = useState(false);
     const [imgLoaded, setImgLoaded] = useState(false);
     return (
@@ -194,7 +287,12 @@ export default function Products() {
               Manage product
             </button>
           ) : (
-            <button className="w-full h-full rounded-lg border border-color1 border-dashed hover:bg-color1 hover:text-white transition-all ease-in-out duration-300">
+            <button
+              className="w-full h-full rounded-lg border border-color1 border-dashed hover:bg-color1 hover:text-white transition-all ease-in-out duration-300"
+              onClick={() => {
+                handleAddToCart(product);
+              }}
+            >
               add to cart
             </button>
           )}
@@ -251,6 +349,9 @@ export default function Products() {
               {products.length > 0 ? (
                 <ul className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2">
                   {products.map((product) => {
+                    if (cart.includes(product._id)) {
+                      return;
+                    }
                     return (
                       <li key={product._id}>
                         <Product {...product} />
@@ -284,6 +385,7 @@ export default function Products() {
             <Loading h={75} w={75} text="Authenticating" />
           </div>
         )}
+        {showCart && <CartModal />}
       </div>
     </>
   );
